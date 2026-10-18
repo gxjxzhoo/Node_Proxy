@@ -1,0 +1,50 @@
+name: Node Proxy
+description: 把 NODE_LINK（vless/vmess/trojan/ss/socks5/http）用 sing-box 转成本地 http+socks 代理（127.0.0.1），后续步骤可用
+inputs:
+  node-link:
+    description: 节点链接；留空则直连
+    required: false
+    default: ""
+  sing-box-sha256:
+    description: 可选，sing-box 压缩包 sha256，填了就强校验
+    required: false
+    default: ""
+  export-proxy-env:
+    description: 设为 true 时同时导出 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY 给后续步骤
+    required: false
+    default: "false"
+outputs:
+  proxy-url:
+    description: 本地代理地址，如 http://127.0.0.1:12345；直连时为空
+    value: ${{ steps.run.outputs.proxy-url }}
+  exit-ip:
+    description: 脱敏后的出口 IP
+    value: ${{ steps.run.outputs.exit-ip }}
+  mode:
+    description: 代理 或 直连
+    value: ${{ steps.run.outputs.mode }}
+runs:
+  using: composite
+  steps:
+    - name: Cache sing-box
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/node-proxy/sing-box
+        key: node-proxy-sing-box-1.14.1-${{ runner.os }}-${{ runner.arch }}
+    - name: Start proxy
+      id: run
+      shell: bash
+      env:
+        NODE_LINK: ${{ inputs.node-link }}
+        SING_BOX_SHA256: ${{ inputs.sing-box-sha256 }}
+        NODE_PROXY_DETACH: "1"
+        NODE_PROXY_WORKDIR: ${{ runner.temp }}/node-proxy
+      run: python3 "${{ github.action_path }}/node_proxy.py"
+    - name: Export proxy env
+      if: inputs.export-proxy-env == 'true' && steps.run.outputs.proxy-url != ''
+      shell: bash
+      run: |
+        u="${{ steps.run.outputs.proxy-url }}"
+        { echo "HTTP_PROXY=$u"; echo "HTTPS_PROXY=$u"; echo "ALL_PROXY=$u";
+          echo "http_proxy=$u"; echo "https_proxy=$u"; echo "all_proxy=$u";
+          echo "NO_PROXY=localhost,127.0.0.1"; } >> "$GITHUB_ENV"
