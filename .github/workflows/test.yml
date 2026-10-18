@@ -60,7 +60,7 @@ jobs:
             tail -20 "$RUNNER_TEMP/node-proxy/sing-box.log" 2>/dev/null | mask
           } > /tmp/result.txt 2>&1
           cat /tmp/result.txt
-          sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/logs/result.txt" -q .sha 2>/dev/null || true)
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/logs/result.txt" -q .sha 2>/dev/null) || sha=""
           gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/logs/result.txt" \
             -f message="test log ${{ github.run_id }} [skip ci]" \
-            -f content="$(base64 -w0 /tmp/result.txt)" ${sha:+-f sha=$sha} >/dev/null
+            -f content="$(base64 -w0 /tmp/result.txt)" ${sha:+-f sha=$sha} -q .content.path
