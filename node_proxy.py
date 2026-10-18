@@ -479,5 +479,5 @@ if __name__ == "__main__":
     _gh_out("mode", mode)
     if url and os.environ.get("GITHUB_ENV"):
         with open(os.environ["GITHUB_ENV"], "a") as f:
-            f.write("NODE_PROXY_URL=%s\n" % url)
+            f.write("NODE_PROXY_URL=%s\nNODE_PROXY_IP=%s\n" % (url, ip or ""))
     print(url, ip, mode)
