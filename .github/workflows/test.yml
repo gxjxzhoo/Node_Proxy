@@ -1,0 +1,39 @@
+name: Self test
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: proxy
+        continue-on-error: true
+        uses: ./
+        with:
+          node-link: ${{ secrets.NODE_LINK }}
+          export-proxy-env: "true"
+      - name: Collect result
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "action outcome: ${{ steps.proxy.outcome }}"
+            echo "mode: ${{ steps.proxy.outputs.mode }}"
+            echo "exit-ip: ${{ steps.proxy.outputs.exit-ip }}"
+            echo "proxy-url set: ${{ steps.proxy.outputs.proxy-url != '' }}"
+            echo "--- curl via proxy env"
+            curl -s -m 20 https://www.cloudflare.com/cdn-cgi/trace | grep -E '^(loc|warp)=' || echo "curl failed"
+            echo "--- manual run"
+            NODE_LINK="${{ secrets.NODE_LINK }}" NODE_PROXY_DETACH=1 NODE_PROXY_WORKDIR=$RUNNER_TEMP/np2 python3 node_proxy.py 2>&1 | sed -E 's/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/x.x.x.x/g' | tail -40
+            echo "--- sing-box log"
+            tail -20 $RUNNER_TEMP/node-proxy/sing-box.log 2>/dev/null | sed -E 's/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/x.x.x.x/g'
+          } > /tmp/result.txt 2>&1
+          cat /tmp/result.txt
+          git config user.name github-actions; git config user.email actions@github.com
+          git fetch origin test-logs 2>/dev/null && git checkout test-logs 2>/dev/null || git checkout --orphan test-logs
+          git rm -rf --cached . >/dev/null 2>&1 || true
+          cp /tmp/result.txt result.txt
+          git add result.txt; git commit -m "test ${{ github.run_id }}" || true
+          git push origin HEAD:test-logs --force
