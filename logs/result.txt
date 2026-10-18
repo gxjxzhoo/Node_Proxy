@@ -1,4 +1,4 @@
-run: 39132515066
+run: 39134435190
 env-config NODE_LINK present: true
 action outcome: success
 mode: 代理
@@ -8,5 +8,5 @@ proxy-url set: true
 colo=SJC
 loc=US
 --- sing-box process
-2531 /home/runner/work/_temp/node-proxy/sing-box run
+2456 /home/runner/work/_temp/node-proxy/sing-box run
 --- sing-box log
