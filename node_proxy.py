@@ -196,26 +196,31 @@ def normalize_link(raw):
     else:
         info = {"vless": normalize_vless, "vmess": normalize_vmess,
                 "trojan": normalize_trojan, "ss": normalize_ss}[scheme](link)
-    print("节点已整理为固定格式：%s" % canonical_redacted(scheme, info))
+    _gh_mask(info)
+    print("节点已整理：%s" % canonical_redacted(scheme, info))
     return scheme, info
 
 
+def _gh_mask(info):
+    """在 GitHub Actions 里把节点的敏感字段注册为 secret，之后任何日志里出现都会显示为 ***。"""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    for k in ("host", "sni", "path", "host_header", "ws_host", "uuid", "id",
+              "password", "user", "service_name", "pbk", "sid"):
+        v = info.get(k)
+        if isinstance(v, str) and len(v) >= 3 and v not in ("none", "tls", "/"):
+            print("::add-mask::%s" % v)
+
+
 def canonical_redacted(scheme, info):
+    """只打印协议和传输方式，服务器/端口/sni/path/凭据一律不输出。"""
     i = info
-    if scheme in ("http", "https", "socks5", "socks5h"):
-        return "%s://%s%s:%d" % (scheme, "****@" if i["user"] or i["password"] else "",
-                                 i["host"], i["port"])
-    if scheme == "vless":
-        return ("vless://****@%s:%d?security=%s&sni=%s&fp=%s&type=%s&path=%s"
-                % (i["host"], i["port"], i["security"], i["sni"], i["fp"] or "-",
-                   i["net"], i["path"]))
-    if scheme == "vmess":
-        return "vmess(id=****,%s:%d,net=%s,tls=%s)" % (i["host"], i["port"], i["net"], i["tls"])
-    if scheme == "trojan":
-        return "trojan://****@%s:%d?type=%s" % (i["host"], i["port"], i["net"])
-    if scheme == "ss":
-        return "ss(%s)://****@%s:%d" % (i["method"], i["host"], i["port"])
-    return scheme + "://****"
+    extra = []
+    for k in ("net", "security", "tls", "method"):
+        v = i.get(k)
+        if v:
+            extra.append("%s=%s" % (k, v))
+    return "%s://****%s" % (scheme, ("（" + ", ".join(extra) + "）") if extra else "")
 
 
 # ---------------------------------------------------------------- 生成 sing-box 配置
