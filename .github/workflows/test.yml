@@ -8,32 +8,59 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Load shared env (env-config)
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: gxjxzhoo/env-config
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: .shared-env
+      - name: Apply shared env
+        shell: bash
+        run: |
+          f=.shared-env/.env
+          if [ -f "$f" ]; then
+            while IFS= read -r line || [ -n "$line" ]; do
+              case "$line" in ''|\#*) continue ;; esac
+              key="${line%%=*}"; value="${line#*=}"
+              [ -z "$value" ] && continue
+              echo "::add-mask::$value"
+              echo "$key=$value" >> "$GITHUB_ENV"
+            done < "$f"
+            echo "loaded env-config"
+          else
+            echo "env-config not available"
+          fi
+          rm -rf .shared-env
       - id: proxy
         continue-on-error: true
         uses: ./
         with:
-          node-link: ${{ secrets.NODE_LINK }}
+          node-link: ${{ env.NODE_LINK }}
           export-proxy-env: "true"
       - name: Collect result
         if: always()
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          mask() { sed -E 's/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/x.x.x.x/g'; }
           {
+            echo "run: ${{ github.run_id }}"
+            echo "env-config NODE_LINK present: ${{ env.NODE_LINK != '' }}"
             echo "action outcome: ${{ steps.proxy.outcome }}"
             echo "mode: ${{ steps.proxy.outputs.mode }}"
             echo "exit-ip: ${{ steps.proxy.outputs.exit-ip }}"
             echo "proxy-url set: ${{ steps.proxy.outputs.proxy-url != '' }}"
-            echo "--- curl via proxy env"
-            curl -s -m 20 https://www.cloudflare.com/cdn-cgi/trace | grep -E '^(loc|warp)=' || echo "curl failed"
-            echo "--- manual run"
-            NODE_LINK="${{ secrets.NODE_LINK }}" NODE_PROXY_DETACH=1 NODE_PROXY_WORKDIR=$RUNNER_TEMP/np2 python3 node_proxy.py 2>&1 | sed -E 's/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/x.x.x.x/g' | tail -40
+            echo "--- curl via exported proxy env"
+            curl -s -m 20 https://www.cloudflare.com/cdn-cgi/trace | grep -E '^(loc|colo)=' || echo "curl failed"
+            echo "--- sing-box process"
+            pgrep -a sing-box | awk '{print $1, $2, $3}' || echo "none"
             echo "--- sing-box log"
-            tail -20 $RUNNER_TEMP/node-proxy/sing-box.log 2>/dev/null | sed -E 's/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/x.x.x.x/g'
+            tail -20 "$RUNNER_TEMP/node-proxy/sing-box.log" 2>/dev/null | mask
           } > /tmp/result.txt 2>&1
           cat /tmp/result.txt
-          git config user.name github-actions; git config user.email actions@github.com
-          git fetch origin test-logs 2>/dev/null && git checkout test-logs 2>/dev/null || git checkout --orphan test-logs
-          git rm -rf --cached . >/dev/null 2>&1 || true
-          cp /tmp/result.txt result.txt
-          git add result.txt; git commit -m "test ${{ github.run_id }}" || true
-          git push origin HEAD:test-logs --force
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/logs/result.txt" -q .sha 2>/dev/null || true)
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/logs/result.txt" \
+            -f message="test log ${{ github.run_id }} [skip ci]" \
+            -f content="$(base64 -w0 /tmp/result.txt)" ${sha:+-f sha=$sha} >/dev/null
