@@ -1,0 +1,12 @@
+run: 39132515066
+env-config NODE_LINK present: true
+action outcome: success
+mode: 代理
+exit-ip: 186.244.*.*
+proxy-url set: true
+--- curl via exported proxy env
+colo=SJC
+loc=US
+--- sing-box process
+2531 /home/runner/work/_temp/node-proxy/sing-box run
+--- sing-box log
