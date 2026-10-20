@@ -2,20 +2,22 @@ name: Self test
 on:
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Load shared env (env-config)
+      - name: 加载共享变量（env-config）
         uses: actions/checkout@v4
         continue-on-error: true
         with:
           repository: gxjxzhoo/env-config
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: .shared-env
-      - name: Apply shared env
+          persist-credentials: false
+
+      - name: 应用共享变量
         shell: bash
         run: |
           f=.shared-env/.env
@@ -27,9 +29,9 @@ jobs:
               echo "::add-mask::$value"
               echo "$key=$value" >> "$GITHUB_ENV"
             done < "$f"
-            echo "loaded env-config"
+            echo "✅ 已加载 env-config"
           else
-            echo "env-config not available"
+            echo "⚠️ 未读到 env-config（检查 PRIVATE_REPO_TOKEN），使用仓库 Secrets"
           fi
           rm -rf .shared-env
       - id: proxy
@@ -41,8 +43,6 @@ jobs:
       - name: Collect result
         if: always()
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           mask() { sed -E 's/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/x.x.x.x/g'; }
           {
@@ -60,7 +60,4 @@ jobs:
             tail -20 "$RUNNER_TEMP/node-proxy/sing-box.log" 2>/dev/null | mask
           } > /tmp/result.txt 2>&1
           cat /tmp/result.txt
-          sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/logs/result.txt" -q .sha 2>/dev/null) || sha=""
-          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/logs/result.txt" \
-            -f message="test log ${{ github.run_id }} [skip ci]" \
-            -f content="$(base64 -w0 /tmp/result.txt)" ${sha:+-f sha=$sha} -q .content.path
+          { echo '```'; cat /tmp/result.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
