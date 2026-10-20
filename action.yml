@@ -27,7 +27,7 @@ runs:
   using: composite
   steps:
     - name: Cache sing-box
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ${{ runner.temp }}/node-proxy/sing-box
         key: node-proxy-sing-box-1.14.1-${{ runner.os }}-${{ runner.arch }}
